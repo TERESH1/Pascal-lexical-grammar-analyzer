@@ -236,7 +236,7 @@ begin
   Result := false;
   if isIdentifier(str, cur_pos, next_pos) then
   begin
-    Result := str.Substring(cur_pos - 1, next_pos - cur_pos) in reserved;
+    Result := str.Substring(cur_pos - 1, next_pos - cur_pos).ToLower() in reserved;
   end;
 end;
 
@@ -309,13 +309,8 @@ procedure AddNewLexem(lexemes: List<lexem>; str: string; l: lexem; cur_pos: inte
 begin
   l.start_index := cur_pos;
   l.value := str.Substring(cur_pos - 1, next_pos - cur_pos);
-  lexemes.Add(l);
-end;
-
-procedure ConcatLexemWithPrev(lexemes: List<lexem>; str: string; l: lexem; cur_pos: integer; next_pos: integer);
-begin
-  l.start_index := cur_pos;
-  l.value := str.Substring(cur_pos - 1, next_pos - cur_pos).ToLower;
+  if not (l is LString) then
+    l.value := l.value.ToLower();
   lexemes.Add(l);
 end;
 
@@ -483,7 +478,7 @@ begin
       (lexemes[cur_pos + 2].value in Operator_4_Overloading) then
     begin
       Result := true;
-      cur_command.AddNode('operator').AddNode(lexemes[cur_pos + 2].value);
+      cur_command.AddNode('operator').AddNode($' {lexemes[cur_pos + 2].value}');
       cur_pos += 3;
     end;
   end;
@@ -517,7 +512,7 @@ begin
       (lexemes[cur_pos + 2].value in Assign_Operator) then
     begin
       Result := true;
-      cur_command.AddNode('operator').AddNode(lexemes[cur_pos + 2].value);
+      cur_command.AddNode('operator').AddNode($' {lexemes[cur_pos + 2].value}');
       cur_pos += 3;
     end;
   end;
@@ -1950,9 +1945,9 @@ begin
   var input_text: string;
   var lexemes := new List<Lexem>();
   if ParamCount > 0 then
-    input_text := ReadAllText(PABCSystem.ParamStr(1)).ToLower
+    input_text := ReadAllText(PABCSystem.ParamStr(1))
   else
-    input_text := ReadAllText('pascal.pas').ToLower;      /////////////////////////////////////////
+    input_text := ReadAllText('pascal.pas');      /////////////////////////////////////////
   input_text := PABCSystem.Trim(input_text);
   write('Lexical analysis...');
   var cur_index := 1;
@@ -2050,9 +2045,9 @@ begin
       cur_index := next_index;
     end;
   end;
+  writeln(True);
   //for var i := 0 to lexemes.Count - 1 do
   //  println($'[{i}] {lexemes[i].start_index}: "{lexemes[i].value}" ({lexemes[i].GetType.Name})');
-  writeln(True);
   
   // 2. Grammar
   write('Grammar analysis...');
