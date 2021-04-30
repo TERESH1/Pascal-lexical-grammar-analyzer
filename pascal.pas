@@ -1,4 +1,11 @@
-﻿type
+﻿// Lexemes:
+//  ( ... ) - 1..
+//  { ... } - 0..
+//  [ ... ] - 0..1
+//  a | b | c ... - a or b or c ...
+//  # ... # - brackets for "or" operation
+
+type
   set_of_string = set of string;
   node = class
   private
@@ -17,12 +24,6 @@
       _value := v;
       _nodes := new List<node>();
     end;
-    
-    (*constructor;
-    begin
-      _value := '';
-      _nodes := new List<node>();
-    end;*)
     
     function AddNode(v: string): node;
     begin
@@ -1491,21 +1492,42 @@ begin
   end;
 end;
 
-/// ClassSection -->  [ AccessModifiers ] (FieldListSequence | SubprogDeclList | PropertyList | ClassConstructor | ClassDestructor)
+/// ClassSection -->  [ AccessModifiers ] ([';'] ['static'] # FieldList | ProcedureDecl | FunctionDecl | Property | ClassConstructor | ClassDestructor #)
 function ClassSection(lexemes: List<lexem>; cur_pos: integer; var next_pos: integer; upper_command: node): boolean;
 begin
   var cur_command := new node('ClassSection');
   if AccessModifiers(lexemes, cur_pos, next_pos, cur_command) then
     cur_pos := next_pos;
   Result := false;
-  while FieldListSequence(lexemes, cur_pos, next_pos, cur_command) or
-  SubprogDeclList(lexemes, cur_pos, next_pos, cur_command) or
-  PropertyList(lexemes, cur_pos, next_pos, cur_command) or
-  ClassConstructor(lexemes, cur_pos, next_pos, cur_command) or
-  ClassDestructor(lexemes, cur_pos, next_pos, cur_command) do
+  if (lexemes[cur_pos].value = 'static') then
   begin
-    cur_pos := next_pos;
+    cur_pos += 1;
+    cur_command.AddNode('static');
+  end;
+  if Assignment(lexemes, cur_pos, next_pos, cur_command) or
+  FieldList(lexemes, cur_pos, next_pos, cur_command) or
+  ProcedureDecl(lexemes, cur_pos, next_pos, cur_command) or 
+  FunctionDecl(lexemes, cur_pos, next_pos, cur_command) or
+  &Property(lexemes, cur_pos, next_pos, cur_command) or
+  ClassConstructor(lexemes, cur_pos, next_pos, cur_command) or
+  ClassDestructor(lexemes, cur_pos, next_pos, cur_command) then
+  begin
     Result := true;
+    repeat
+      cur_pos := next_pos;
+      if (lexemes[cur_pos].value = ';') and 
+      (lexemes[cur_pos + 1].value = 'static') then
+      begin
+        cur_pos += 2;
+        cur_command.AddNode('static');
+      end;
+    until not (Assignment(lexemes, cur_pos, next_pos, cur_command) or
+    FieldList(lexemes, cur_pos, next_pos, cur_command) or
+    ProcedureDecl(lexemes, cur_pos, next_pos, cur_command) or 
+    FunctionDecl(lexemes, cur_pos, next_pos, cur_command) or
+    &Property(lexemes, cur_pos, next_pos, cur_command) or
+    ClassConstructor(lexemes, cur_pos, next_pos, cur_command) or
+    ClassDestructor(lexemes, cur_pos, next_pos, cur_command));
   end;
   next_pos := cur_pos;
   if Result then
