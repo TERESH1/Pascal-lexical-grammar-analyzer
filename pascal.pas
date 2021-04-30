@@ -7,6 +7,7 @@
 
 type
   set_of_string = set of string;
+  
   node = class
   private
     _nodes: list<node>;
@@ -43,51 +44,23 @@ type
     start_index: integer;
     value: string;
   end;
-  LIdentifier = class(Lexem);
-  LNumber = class(Lexem);
-  LNInteger = class(LNumber);
-  LNReal = class(LNumber);
-  LString = class(Lexem);
-  LReserved = class(Lexem);
-  LSymbol = class(Lexem);
+
+procedure PrintLexemes(lexemes: List<lexem>);
+begin
+  for var i := 0 to lexemes.Count - 1 do
+    println($'[{i}] {lexemes[i].start_index}: "{lexemes[i].value}" ({lexemes[i].GetType.Name})');
+end;
+
+type
+  LPascalIdentifier = class(Lexem);
+  LPascalNumber = class(Lexem);
+  LPascalNInteger = class(LPascalNumber);
+  LPascalNReal = class(LPascalNumber);
+  LPascalString = class(Lexem);
+  LPascalReserved = class(Lexem);
+  LPascalSymbol = class(Lexem);
   
   Relation_ = (Equal, NotEqual, InSet);
-
-const
-  letters = ['a'..'z', 'A'..'Z', '_'];
-  digits = ['0'..'9'];
-  simblos = [',', '.', ';', ':', '^', '(', ')', '[', ']', '<', '>', '=', '+', '-', '*', '/', '$', '@', '&', '#'];
-  reserved = ['and', 'downto', 'if', 'or', 'then', 'array', 'else', 'in', 'packed', 'to', 'begin', 'end', 'label', 'procedure', 'type', 'case', 'file', 'mod', 'program', 'until', 'const', 'for', 'nil', 'record', 'var', 'div', 'function', 'not', 'repeat', 'while', 'do', 'goto', 'of', 'set', 'with', 'class', 'private', 'public', 'protected', 'internal', 'constructor', 'destructor', 'property', 'auto', 'sealed', 'abstract', 'forward', 'extensionmethod', 'default', 'try', 'except', 'finally', 'on', 'operator'];
-  
-  Unary_Operator = ['+', '-', 'not', '@', '^'];
-  Mult_Operator = ['*', '/', 'div', 'mod', 'and', 'shl', 'shr'];
-  Add_Operator = ['+', '-', 'or', 'xor'];
-  _Relation_ = ['=', '<>', '<', '>', '<=', '>=', 'in', 'is'];
-  Assign_Operator = [':=', '+=', '-=', '*=', '/='];
-  Operator_4_Overloading = Unary_Operator + Mult_Operator + Add_Operator + _Relation_ - ['is'] + ['implicit', 'explicit'];
-  class_prefix = ['auto', 'sealed', 'abstract'];
-  //pre_declarations = ['forward', 'extensionmethod'];
-
-
-function AssociativeToLeft(n: node): node;
-begin
-  Result := new node(n.value);
-  if n.Count >= 3 then
-  begin
-    Result.AddNode(n[0]);
-    Result.AddNode(n[1]);
-    Result.AddNode(n[2]);
-    for var i := 1 to ((n.Count - 1) div 2) - 1 do
-    begin
-      var t := new node(n.value);
-      t.AddNode(Result);
-      Result := t;
-      Result.AddNode(n[i * 2 + 1]);
-      Result.AddNode(n[(i + 1) * 2]);
-    end;
-  end else
-    Result.AddNode(n[0]);
-end;
 
 function SafeCharIn(str: string; cur_pos: integer; &set: set of char): boolean;
 begin
@@ -143,176 +116,316 @@ begin
   end;
 end;
 
-function isLetter(str: string; cur_pos: integer): boolean;
-begin
-  Result := SafeCharIn(str, cur_pos, letters);
-end;
-
-function isDigit(str: string; cur_pos: integer): boolean;
-begin
-  Result := SafeCharIn(str, cur_pos, digits);
-end;
-
-function isIdentifier(str: string; cur_pos: integer; var next_pos: integer): boolean;
-begin
-  if isLetter(str, cur_pos) then 
-  begin
-    Result := true;
-    next_pos := cur_pos + 1;
-    while(isLetter(str, next_pos) or isDigit(str, next_pos)) do
-      next_pos += 1;
-  end
-  else Result := false;
-end;
-
-function isInteger(str: string; cur_pos: integer; var next_pos: integer): boolean;
-begin
-  if isDigit(str, cur_pos) then 
-  begin
-    Result := true;
-    next_pos := cur_pos + 1;
-    while(isDigit(str, next_pos)) do
-      next_pos += 1;
-  end
-  else Result := false;
-end;
-
-function isExpDesignator(str: string; cur_pos: integer): boolean;
-begin
-  var str_cur_pos := str[cur_pos];
-  Result := (str_cur_pos = 'e') or (str_cur_pos = 'E');
-end;
-
-function isExponent(str: string; cur_pos: integer; var next_pos: integer): boolean;
-begin
-  if isExpDesignator(str, cur_pos) then 
-  begin
-    var t := cur_pos + 1;
-    var _chr := str[next_pos];
-    if (_chr = '+') or (_chr = '-') then
-      t += 1;
-    Result := isInteger(str, t, next_pos);
-    exit;
-  end;
-  Result := false;
-end;
-
-function isReal(str: string; cur_pos: integer; var next_pos: integer): boolean;
-begin
-  if isInteger(str, cur_pos, next_pos) then 
-    if SafeCharComp(str, next_pos, Relation_.Equal, '.') then
-      if isInteger(str, next_pos + 1, next_pos) then
-      begin
-        Result := true;
-        isExponent(str, next_pos, next_pos);
-        exit;
-      end;
-  Result := false;
-end;
-
-function isNumber(str: string; cur_pos: integer; var next_pos: integer): boolean;
-begin
-  Result := isInteger(str, cur_pos, next_pos) or isReal(str, cur_pos, next_pos);
-end;
-
-function isString(str: string; cur_pos: integer; var next_pos: integer): boolean;
-begin
-  var ch := #39; //'
-  if (str[cur_pos] <> ch) then
-    ch := #34; //"
-  if (str[cur_pos] = ch) then
-  begin
-    next_pos := str.IndexOf(ch, cur_pos) + 2;
-    if next_pos <> 1 then
+type
+  PascalLexicalAnalyzer = class
+    static letters := ['a'..'z', 'A'..'Z', '_'];
+    static digits := ['0'..'9'];
+    static simblos := [',', '.', ';', ':', '^', '(', ')', '[', ']', '<', '>', '=', '+', '-', '*', '/', '$', '@', '&', '#'];
+    static reserved := ['and', 'downto', 'if', 'or', 'then', 'array', 'else', 'in', 'packed', 'to', 'begin', 'end', 'label', 'procedure', 'type', 'case', 'file', 'mod', 'program', 'until', 'const', 'for', 'nil', 'record', 'var', 'div', 'function', 'not', 'repeat', 'while', 'do', 'goto', 'of', 'set', 'with', 'class', 'private', 'public', 'protected', 'internal', 'constructor', 'destructor', 'property', 'auto', 'sealed', 'abstract', 'forward', 'extensionmethod', 'default', 'try', 'except', 'finally', 'on', 'operator', 'static'];
+    
+    static function Analyze(str: string; var lexemes: List<lexem>): boolean;
     begin
       Result := true;
-      exit;
+      var cur_index := 1;
+      while cur_index <= str.Length do
+      begin
+        var l: lexem;
+        var next_index: integer;
+        var isNotFind := true;
+        var cur_char := str[cur_index];
+        //var cur_ord := ord(cur_char);
+        
+        while (cur_char = #9) or (cur_char = #10) or (cur_char = #13) or (cur_char = ' ') do
+        begin
+          cur_index += 1;
+          cur_char := str[cur_index];
+        end;
+        
+        if (cur_char = '(') and (str[cur_index + 1] = '*') then
+        begin
+          cur_index := Pos('*)', str, cur_index + 2) + 2;
+          continue;
+        end;
+        if (cur_char = '{') then
+        begin
+          cur_index := Pos('}', str, cur_index) + 1;
+          continue;
+        end;
+        if (cur_char = '/') and (str[cur_index + 1] = '/') then
+        begin
+          cur_index := Pos(#10, str, cur_index) + 1;
+          continue;
+        end;
+        
+        if isSymbol(str, cur_index, next_index) then
+        begin
+          l := new LPascalSymbol();
+          isNotFind := false;
+        end;
+        
+        if isNotFind and isReserved(str, cur_index, next_index) then
+        begin
+          if SafeLastLexemValueComp(lexemes, Relation_.Equal, '&') then
+          begin
+            lexemes.RemoveAt(lexemes.Count - 1);
+            l := new LPascalIdentifier();
+            AddNewPascalLexem(lexemes, str, l, cur_index - 1, next_index);
+            cur_index := next_index;
+            continue;
+          end else
+            l := new LPascalReserved();
+          isNotFind := false;
+        end;
+        
+        if isNotFind and isIdentifier(str, cur_index, next_index) then
+        begin
+          l := new LPascalIdentifier();
+          isNotFind := false;
+        end;
+        
+        if isNotFind and isReal(str, cur_index, next_index) then
+        begin
+          l := new LPascalNReal();
+          isNotFind := false;
+        end;
+        
+        if isNotFind and isInteger(str, cur_index, next_index) then
+        begin
+          if SafeLastLexemValueComp(lexemes, Relation_.Equal, '#') then
+          begin
+            lexemes.RemoveAt(lexemes.Count - 1);
+            l := new LPascalString();
+            AddNewPascalLexem(lexemes, str, l, cur_index - 1, next_index);
+            cur_index := next_index;
+            continue;
+          end else
+            l := new LPascalNInteger();
+          isNotFind := false;
+        end;
+        
+        if isNotFind and isString(str, cur_index, next_index) then
+        begin
+          l := new LPascalString();
+          isNotFind := false;
+        end;
+        
+        if isNotFind then
+        begin
+          writeln();
+          writeln($'Error: [{cur_index}] {str.Substring(cur_index-1, min(20, str.Length))} ...');
+          Result := false;
+          exit;
+        end
+        else
+        begin
+          AddNewPascalLexem(lexemes, str, l, cur_index, next_index);
+          cur_index := next_index;
+        end;
+      end;
     end;
-  end;
-  Result := false;
-end;
-
-function isReserved(str: string; cur_pos: integer; var next_pos: integer): boolean;
-begin
-  Result := false;
-  if isIdentifier(str, cur_pos, next_pos) then
-  begin
-    Result := str.Substring(cur_pos - 1, next_pos - cur_pos).ToLower() in reserved;
-  end;
-end;
-
-function isSymbol(str: string; cur_pos: integer; var next_pos: integer): boolean;
-begin
-  var cur_char := str[cur_pos];
-  Result := cur_char in simblos;
-  if Result then
-  begin
-    next_pos := cur_pos + 1;
-    if cur_char = ':' then
-      if SafeCharComp(str, cur_pos + 1, Relation_.Equal, '=') then
-      begin
-        next_pos += 1;
-        exit;
-      end;
-    if cur_char = '+' then
-      if SafeCharComp(str, cur_pos + 1, Relation_.Equal, '=') then
-      begin
-        next_pos += 1;
-        exit;
-      end;
-    if cur_char = '-' then
-      if SafeCharComp(str, cur_pos + 1, Relation_.Equal, '=') then
-      begin
-        next_pos += 1;
-        exit;
-      end;
-    if cur_char = '*' then
-      if SafeCharComp(str, cur_pos + 1, Relation_.Equal, '=') then
-      begin
-        next_pos += 1;
-        exit;
-      end;
-    if cur_char = '/' then
-      if SafeCharComp(str, cur_pos + 1, Relation_.Equal, '=') then
-      begin
-        next_pos += 1;
-        exit;
-      end;
-    if cur_char = '<' then
+    
+    static procedure AddNewPascalLexem(lexemes: List<lexem>; str: string; l: lexem; cur_pos: integer; next_pos: integer);
     begin
-      if SafeCharComp(str, cur_pos + 1, Relation_.Equal, '=') then
+      l.start_index := cur_pos;
+      l.value := str.Substring(cur_pos - 1, next_pos - cur_pos);
+      if not (l is LPascalString) then
+        l.value := l.value.ToLower();
+      lexemes.Add(l);
+    end;
+    
+    static function isLetter(str: string; cur_pos: integer): boolean;
+    begin
+      Result := SafeCharIn(str, cur_pos, letters);
+    end;
+    
+    static function isDigit(str: string; cur_pos: integer): boolean;
+    begin
+      Result := SafeCharIn(str, cur_pos, digits);
+    end;
+    
+    static function isIdentifier(str: string; cur_pos: integer; var next_pos: integer): boolean;
+    begin
+      if isLetter(str, cur_pos) then 
       begin
-        next_pos += 1;
+        Result := true;
+        next_pos := cur_pos + 1;
+        while(isLetter(str, next_pos) or isDigit(str, next_pos)) do
+          next_pos += 1;
+      end
+      else Result := false;
+    end;
+    
+    static function isInteger(str: string; cur_pos: integer; var next_pos: integer): boolean;
+    begin
+      if isDigit(str, cur_pos) then 
+      begin
+        Result := true;
+        next_pos := cur_pos + 1;
+        while(isDigit(str, next_pos)) do
+          next_pos += 1;
+      end
+      else Result := false;
+    end;
+    
+    static function isExpDesignator(str: string; cur_pos: integer): boolean;
+    begin
+      var str_cur_pos := str[cur_pos];
+      Result := (str_cur_pos = 'e') or (str_cur_pos = 'E');
+    end;
+    
+    static function isExponent(str: string; cur_pos: integer; var next_pos: integer): boolean;
+    begin
+      if isExpDesignator(str, cur_pos) then 
+      begin
+        var t := cur_pos + 1;
+        var _chr := str[next_pos];
+        if (_chr = '+') or (_chr = '-') then
+          t += 1;
+        Result := isInteger(str, t, next_pos);
         exit;
       end;
-      if SafeCharComp(str, cur_pos + 1, Relation_.Equal, '>') then
+      Result := false;
+    end;
+    
+    static function isReal(str: string; cur_pos: integer; var next_pos: integer): boolean;
+    begin
+      if isInteger(str, cur_pos, next_pos) then 
+        if SafeCharComp(str, next_pos, Relation_.Equal, '.') then
+          if isInteger(str, next_pos + 1, next_pos) then
+          begin
+            Result := true;
+            isExponent(str, next_pos, next_pos);
+            exit;
+          end;
+      Result := false;
+    end;
+    
+    static function isNumber(str: string; cur_pos: integer; var next_pos: integer): boolean;
+    begin
+      Result := isInteger(str, cur_pos, next_pos) or isReal(str, cur_pos, next_pos);
+    end;
+    
+    static function isString(str: string; cur_pos: integer; var next_pos: integer): boolean;
+    begin
+      var ch := #39; //'
+      if (str[cur_pos] <> ch) then
+        ch := #34; //"
+      if (str[cur_pos] = ch) then
       begin
-        next_pos += 1;
-        exit;
+        next_pos := str.IndexOf(ch, cur_pos) + 2;
+        if next_pos <> 1 then
+        begin
+          Result := true;
+          exit;
+        end;
+      end;
+      Result := false;
+    end;
+    
+    static function isReserved(str: string; cur_pos: integer; var next_pos: integer): boolean;
+    begin
+      Result := false;
+      if isIdentifier(str, cur_pos, next_pos) then
+      begin
+        Result := str.Substring(cur_pos - 1, next_pos - cur_pos).ToLower() in reserved;
       end;
     end;
-    if cur_char = '>' then
-      if SafeCharComp(str, cur_pos + 1, Relation_.Equal, '=') then
+    
+    static function isSymbol(str: string; cur_pos: integer; var next_pos: integer): boolean;
+    begin
+      var cur_char := str[cur_pos];
+      Result := cur_char in simblos;
+      if Result then
       begin
-        next_pos += 1;
-        exit;
+        next_pos := cur_pos + 1;
+        if cur_char = ':' then
+          if SafeCharComp(str, cur_pos + 1, Relation_.Equal, '=') then
+          begin
+            next_pos += 1;
+            exit;
+          end;
+        if cur_char = '+' then
+          if SafeCharComp(str, cur_pos + 1, Relation_.Equal, '=') then
+          begin
+            next_pos += 1;
+            exit;
+          end;
+        if cur_char = '-' then
+          if SafeCharComp(str, cur_pos + 1, Relation_.Equal, '=') then
+          begin
+            next_pos += 1;
+            exit;
+          end;
+        if cur_char = '*' then
+          if SafeCharComp(str, cur_pos + 1, Relation_.Equal, '=') then
+          begin
+            next_pos += 1;
+            exit;
+          end;
+        if cur_char = '/' then
+          if SafeCharComp(str, cur_pos + 1, Relation_.Equal, '=') then
+          begin
+            next_pos += 1;
+            exit;
+          end;
+        if cur_char = '<' then
+        begin
+          if SafeCharComp(str, cur_pos + 1, Relation_.Equal, '=') then
+          begin
+            next_pos += 1;
+            exit;
+          end;
+          if SafeCharComp(str, cur_pos + 1, Relation_.Equal, '>') then
+          begin
+            next_pos += 1;
+            exit;
+          end;
+        end;
+        if cur_char = '>' then
+          if SafeCharComp(str, cur_pos + 1, Relation_.Equal, '=') then
+          begin
+            next_pos += 1;
+            exit;
+          end;
+        if cur_char = '.' then
+          if SafeCharComp(str, cur_pos + 1, Relation_.Equal, '.') then
+          begin
+            next_pos += 1;
+            exit;
+          end;
       end;
-    if cur_char = '.' then
-      if SafeCharComp(str, cur_pos + 1, Relation_.Equal, '.') then
-      begin
-        next_pos += 1;
-        exit;
-      end;
+    end;
   end;
-end;
 
-procedure AddNewLexem(lexemes: List<lexem>; str: string; l: lexem; cur_pos: integer; next_pos: integer);
+const
+  Unary_Operator = ['+', '-', 'not', '@', '^'];
+  Mult_Operator = ['*', '/', 'div', 'mod', 'and', 'shl', 'shr'];
+  Add_Operator = ['+', '-', 'or', 'xor'];
+  _Relation_ = ['=', '<>', '<', '>', '<=', '>=', 'in', 'is'];
+  Assign_Operator = [':=', '+=', '-=', '*=', '/='];
+  Operator_4_Overloading = Unary_Operator + Mult_Operator + Add_Operator + _Relation_ - ['is'] + ['implicit', 'explicit'];
+  class_prefix = ['auto', 'sealed', 'abstract'];
+  //pre_declarations = ['forward', 'extensionmethod'];
+
+
+function AssociativeToLeft(n: node): node;
 begin
-  l.start_index := cur_pos;
-  l.value := str.Substring(cur_pos - 1, next_pos - cur_pos);
-  if not (l is LString) then
-    l.value := l.value.ToLower();
-  lexemes.Add(l);
+  Result := new node(n.value);
+  if n.Count >= 3 then
+  begin
+    Result.AddNode(n[0]);
+    Result.AddNode(n[1]);
+    Result.AddNode(n[2]);
+    for var i := 1 to ((n.Count - 1) div 2) - 1 do
+    begin
+      var t := new node(n.value);
+      t.AddNode(Result);
+      Result := t;
+      Result.AddNode(n[i * 2 + 1]);
+      Result.AddNode(n[(i + 1) * 2]);
+    end;
+  end else
+    Result.AddNode(n[0]);
 end;
 
 function UnaryOperator(lexemes: List<lexem>; cur_pos: integer; upper_command: node): boolean;
@@ -666,8 +779,8 @@ end;
 function Factor(lexemes: List<lexem>; cur_pos: integer; var next_pos: integer; upper_command: node): boolean;
 begin
   var cur_command := new node('Factor');
-  Result := (lexemes[cur_pos] is LNumber) or
-    (lexemes[cur_pos] is LString) or 
+  Result := (lexemes[cur_pos] is LPascalNumber) or
+    (lexemes[cur_pos] is LPascalString) or 
     (lexemes[cur_pos].value = 'true') or 
     (lexemes[cur_pos].value = 'false') or 
     (lexemes[cur_pos].value = 'nil');
@@ -680,7 +793,7 @@ begin
   begin
     Result := 
       (lexemes[cur_pos].value = '$') and
-      (lexemes[cur_pos + 1] is LString);
+      (lexemes[cur_pos + 1] is LPascalString);
     if Result then
     begin
       cur_command.AddNode('$' + lexemes[cur_pos + 1].value);
@@ -768,7 +881,7 @@ begin
     (lexemes[cur_pos].value = 'dispose'))
     and
     (lexemes[cur_pos + 1].value = '(') and 
-    (lexemes[cur_pos + 2] is LIdentifier) and 
+    (lexemes[cur_pos + 2] is LPascalIdentifier) and 
     (lexemes[cur_pos + 3].value = ')');
   if Result then
   begin
@@ -819,7 +932,7 @@ begin
   var cur_command := new node('DesignatorStuff');
   Result := false;
   if SafeLexemComp(lexemes, cur_pos, Relation_.Equal, '.') and 
-    (lexemes[cur_pos + 1] is LIdentifier) then
+    (lexemes[cur_pos + 1] is LPascalIdentifier) then
   begin
     cur_command.AddNode(lexemes[cur_pos + 1].value);
     next_pos := cur_pos + 2;
@@ -854,7 +967,7 @@ end;
 function Designator(lexemes: List<lexem>; cur_pos: integer; var next_pos: integer; upper_command: node): boolean;
 begin
   var cur_command := new node('Designator');
-  Result := (lexemes[cur_pos] is LIdentifier);
+  Result := (lexemes[cur_pos] is LPascalIdentifier);
   if Result then
   begin
     cur_command.AddNode(lexemes[cur_pos].value);
@@ -960,7 +1073,7 @@ begin
       cur_command.AddNode('var').AddNode(lexemes[cur_pos].value);
     end;
     Result :=
-      (lexemes[cur_pos] is LIdentifier) and
+      (lexemes[cur_pos] is LPascalIdentifier) and
       (lexemes[cur_pos + 1].value = ':=') and
       Expression(lexemes, cur_pos + 2, next_pos, cur_command) and
       WhichWay(lexemes, next_pos, next_pos, cur_command) and
@@ -1123,7 +1236,7 @@ begin
       begin
         cur_pos += 1;
         var sub_command := cur_command.AddNode('on');
-        if (lexemes[cur_pos] is LIdentifier) and
+        if (lexemes[cur_pos] is LPascalIdentifier) and
         (lexemes[cur_pos + 1].value = ':') then
         begin
           sub_command.AddNode(lexemes[cur_pos].value);
@@ -1288,7 +1401,7 @@ function PointerType(lexemes: List<lexem>; cur_pos: integer; var next_pos: integ
 begin
   Result :=
     (lexemes[cur_pos].value = '^') and
-    (lexemes[cur_pos + 1] is LIdentifier);
+    (lexemes[cur_pos + 1] is LPascalIdentifier);
   if Result then
   begin
     next_pos := cur_pos + 2;
@@ -1353,7 +1466,7 @@ begin
   if Result then
   begin
     cur_pos += 1;
-    if (lexemes[cur_pos] is LIdentifier) then
+    if (lexemes[cur_pos] is LPascalIdentifier) then
     begin
       cur_command.AddNode(lexemes[cur_pos].value);
       cur_pos += 1;
@@ -1375,7 +1488,7 @@ begin
   if Result then
   begin
     cur_pos += 1;
-    if (lexemes[cur_pos] is LIdentifier) then
+    if (lexemes[cur_pos] is LPascalIdentifier) then
     begin
       cur_command.AddNode(lexemes[cur_pos].value);
       cur_pos += 1;
@@ -1446,7 +1559,7 @@ begin
   var cur_command := new node('Property');
   Result := 
     (lexemes[cur_pos].value = 'property') and
-    (lexemes[cur_pos + 1] is LIdentifier);
+    (lexemes[cur_pos + 1] is LPascalIdentifier);
   if Result then
   begin
     cur_command.AddNode(lexemes[cur_pos + 1].value);
@@ -1477,7 +1590,7 @@ begin
   end;
 end;
 
-/// PropertyList -->  Property {";" Property}
+(*/// PropertyList -->  Property {";" Property}
 function PropertyList(lexemes: List<lexem>; cur_pos: integer; var next_pos: integer; upper_command: node): boolean;
 begin
   var cur_command := new node('PropertyList');
@@ -1490,7 +1603,7 @@ begin
     next_pos := cur_pos;
     upper_command.AddNode(cur_command);
   end;
-end;
+end;*)
 
 /// ClassSection -->  [ AccessModifiers ] ([';'] ['static'] # FieldList | ProcedureDecl | FunctionDecl | Property | ClassConstructor | ClassDestructor #)
 function ClassSection(lexemes: List<lexem>; cur_pos: integer; var next_pos: integer; upper_command: node): boolean;
@@ -1702,11 +1815,11 @@ end;
 function ConstFactor(lexemes: List<lexem>; cur_pos: integer; var next_pos: integer; upper_command: node): boolean;
 begin
   Result :=
-    (lexemes[cur_pos] is LIdentifier) or
-    (lexemes[cur_pos] is LNumber) or
+    (lexemes[cur_pos] is LPascalIdentifier) or
+    (lexemes[cur_pos] is LPascalNumber) or
     (lexemes[cur_pos].value = 'true') or
     (lexemes[cur_pos].value = 'false') or
-    (lexemes[cur_pos] is LString) or
+    (lexemes[cur_pos] is LPascalString) or
     (lexemes[cur_pos].value = 'nil');
   if Result then
   begin
@@ -1734,7 +1847,7 @@ begin
   var cur_command := new node('VariableDecl');
   cur_command.AddNode(lexemes[cur_pos].value);
   Result := 
-    (lexemes[cur_pos] is LIdentifier) and
+    (lexemes[cur_pos] is LPascalIdentifier) and
     (lexemes[cur_pos + 1].value = ':') and
     &Type(lexemes, cur_pos + 2, next_pos, cur_command) and
     (lexemes[next_pos].value = ':=') and
@@ -1744,7 +1857,7 @@ begin
     if cur_command.Count > 1 then
       cur_command._nodes.RemoveAt(1);
     Result := 
-      (lexemes[cur_pos] is LIdentifier) and
+      (lexemes[cur_pos] is LPascalIdentifier) and
       (lexemes[cur_pos + 1].value = ':=') and
       Expression(lexemes, cur_pos + 2, next_pos, cur_command);
     if not Result then
@@ -1766,7 +1879,7 @@ begin
   var cur_command := new node('TypeDef');
   cur_command.AddNode(lexemes[cur_pos].value);
   Result := 
-    (lexemes[cur_pos] is LIdentifier) and 
+    (lexemes[cur_pos] is LPascalIdentifier) and 
     (lexemes[cur_pos + 1].value = '=') and 
     &Type(lexemes, cur_pos + 2, next_pos, cur_command);
   if Result then
@@ -1777,7 +1890,7 @@ end;
 function ConstantDef(lexemes: List<lexem>; cur_pos: integer; var next_pos: integer; upper_command: node): boolean;
 begin
   var cur_command := new node('ConstantDef');
-  Result := (lexemes[cur_pos] is LIdentifier);
+  Result := (lexemes[cur_pos] is LPascalIdentifier);
   if Result then
   begin
     cur_command.AddNode(lexemes[cur_pos].value);
@@ -1880,12 +1993,12 @@ end;
 function IdentList(lexemes: List<lexem>; cur_pos: integer; var next_pos: integer; upper_command: node): boolean;
 begin
   var cur_command := new node('IdentList');
-  Result := lexemes[cur_pos] is LIdentifier;
+  Result := lexemes[cur_pos] is LPascalIdentifier;
   if Result then
   begin
     cur_command.AddNode(lexemes[cur_pos].value);
     next_pos := cur_pos + 1;
-    while (lexemes[next_pos].value = ',') and (lexemes[next_pos + 1] is LIdentifier) do
+    while (lexemes[next_pos].value = ',') and (lexemes[next_pos + 1] is LPascalIdentifier) do
     begin
       cur_command.AddNode(lexemes[next_pos + 1].value);
       next_pos += 2;
@@ -1914,7 +2027,7 @@ function ProgramModule(lexemes: List<lexem>; cur_pos: integer; var next_pos: int
 begin
   var cur_command := new node('ProgramModule');
   if (lexemes[cur_pos].value = 'program') and
-  (lexemes[cur_pos + 1] is LIdentifier) then
+  (lexemes[cur_pos + 1] is LPascalIdentifier) then
   begin
     cur_command.AddNode('program').AddNode(lexemes[cur_pos + 1].value);
     if Parameters(lexemes, cur_pos + 2, next_pos, cur_command) then
@@ -1972,106 +2085,9 @@ begin
     input_text := ReadAllText('pascal.pas');      /////////////////////////////////////////
   input_text := PABCSystem.Trim(input_text);
   write('Lexical analysis...');
-  var cur_index := 1;
-  while cur_index <= input_text.Length do
-  begin
-    var l: lexem;
-    var next_index: integer;
-    var isNotFind := true;
-    var cur_char := input_text[cur_index];
-    //var cur_ord := ord(cur_char);
-    
-    while (cur_char = #9) or (cur_char = #10) or (cur_char = #13) or (cur_char = ' ') do
-    begin
-      cur_index += 1;
-      cur_char := input_text[cur_index];
-    end;
-    
-    if (cur_char = '(') and (input_text[cur_index + 1] = '*') then
-    begin
-      cur_index := Pos('*)', input_text, cur_index + 2) + 2;
-      continue;
-    end;
-    if (cur_char = '{') then
-    begin
-      cur_index := Pos('}', input_text, cur_index) + 1;
-      continue;
-    end;
-    if (cur_char = '/') and (input_text[cur_index + 1] = '/') then
-    begin
-      cur_index := Pos(#10, input_text, cur_index) + 1;
-      continue;
-    end;
-    
-    if isSymbol(input_text, cur_index, next_index) then
-    begin
-      l := new LSymbol();
-      isNotFind := false;
-    end;
-    
-    if isNotFind and isReserved(input_text, cur_index, next_index) then
-    begin
-      if SafeLastLexemValueComp(lexemes, Relation_.Equal, '&') then
-      begin
-        lexemes.RemoveAt(lexemes.Count - 1);
-        l := new LIdentifier();
-        AddNewLexem(lexemes, input_text, l, cur_index - 1, next_index);
-        cur_index := next_index;
-        continue;
-      end else
-        l := new LReserved();
-      isNotFind := false;
-    end;
-    
-    if isNotFind and isIdentifier(input_text, cur_index, next_index) then
-    begin
-      l := new LIdentifier();
-      isNotFind := false;
-    end;
-    
-    if isNotFind and isReal(input_text, cur_index, next_index) then
-    begin
-      l := new LNReal();
-      isNotFind := false;
-    end;
-    
-    if isNotFind and isInteger(input_text, cur_index, next_index) then
-    begin
-      if SafeLastLexemValueComp(lexemes, Relation_.Equal, '#') then
-      begin
-        lexemes.RemoveAt(lexemes.Count - 1);
-        l := new LString();
-        AddNewLexem(lexemes, input_text, l, cur_index - 1, next_index);
-        cur_index := next_index;
-        continue;
-      end else
-        l := new LNInteger();
-      isNotFind := false;
-    end;
-    
-    if isNotFind and isString(input_text, cur_index, next_index) then
-    begin
-      l := new LString();
-      isNotFind := false;
-    end;
-    
-    if isNotFind then
-    begin
-      writeln();
-      writeln($'Error: [{cur_index}] {input_text.Substring(cur_index-1, min(20, input_text.Length))} ...');
-      exit;
-    end
-    else
-    begin
-      AddNewLexem(lexemes, input_text, l, cur_index, next_index);
-      cur_index := next_index;
-    end;
-  end;
-  writeln(True);
-  //for var i := 0 to lexemes.Count - 1 do
-  //  println($'[{i}] {lexemes[i].start_index}: "{lexemes[i].value}" ({lexemes[i].GetType.Name})');
-  
-  // 2. Grammar
+  PascalLexicalAnalyzer.Analyze(input_text, lexemes).Println();
+  PrintLexemes(lexemes);
+   // 2. Grammar
   write('Grammar analysis...');
   var next_pos := 0;
   var tree_command := new node('');
