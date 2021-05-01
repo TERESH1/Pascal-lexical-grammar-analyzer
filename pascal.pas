@@ -1,11 +1,4 @@
-﻿// Lexemes:
-//  ( ... ) - 1..
-//  { ... } - 0..
-//  [ ... ] - 0..1
-//  a | b | c ... - a or b or c ...
-//  # ... # - brackets for "or" operation
-
-type
+﻿type
   set_of_string = set of string;
   
   node = class
@@ -121,7 +114,7 @@ type
     static letters := ['a'..'z', 'A'..'Z', '_'];
     static digits := ['0'..'9'];
     static simblos := [',', '.', ';', ':', '^', '(', ')', '[', ']', '<', '>', '=', '+', '-', '*', '/', '$', '@', '&', '#'];
-    static reserved := ['and', 'downto', 'if', 'or', 'then', 'array', 'else', 'in', 'packed', 'to', 'begin', 'end', 'label', 'procedure', 'type', 'case', 'file', 'mod', 'program', 'until', 'const', 'for', 'nil', 'record', 'var', 'div', 'function', 'not', 'repeat', 'while', 'do', 'goto', 'of', 'set', 'with', 'class', 'private', 'public', 'protected', 'internal', 'constructor', 'destructor', 'property', 'auto', 'sealed', 'abstract', 'forward', 'extensionmethod', 'default', 'try', 'except', 'finally', 'on', 'operator', 'static'];
+    static reserved_words := ['and', 'downto', 'if', 'or', 'then', 'array', 'else', 'in', 'packed', 'to', 'begin', 'end', 'label', 'procedure', 'type', 'case', 'file', 'mod', 'program', 'until', 'const', 'for', 'nil', 'record', 'var', 'div', 'function', 'not', 'repeat', 'while', 'do', 'goto', 'of', 'set', 'with', 'class', 'private', 'public', 'protected', 'internal', 'constructor', 'destructor', 'property', 'auto', 'sealed', 'abstract', 'forward', 'extensionmethod', 'default', 'try', 'except', 'finally', 'on', 'operator', 'static', 'new'];
     
     static function Analyze(str: string; var lexemes: List<lexem>): boolean;
     begin
@@ -157,13 +150,13 @@ type
           continue;
         end;
         
-        if isSymbol(str, cur_index, next_index) then
+        if Symbol(str, cur_index, next_index) then
         begin
           l := new LPascalSymbol();
           isNotFind := false;
         end;
         
-        if isNotFind and isReserved(str, cur_index, next_index) then
+        if isNotFind and Reserved(str, cur_index, next_index) then
         begin
           if SafeLastLexemValueComp(lexemes, Relation_.Equal, '&') then
           begin
@@ -177,19 +170,27 @@ type
           isNotFind := false;
         end;
         
-        if isNotFind and isIdentifier(str, cur_index, next_index) then
+        if isNotFind and Identifier(str, cur_index, next_index) then
         begin
-          l := new LPascalIdentifier();
+          if SafeLastLexemValueComp(lexemes, Relation_.Equal, '&') then
+          begin
+            lexemes.RemoveAt(lexemes.Count - 1);
+            l := new LPascalIdentifier();
+            AddNewPascalLexem(lexemes, str, l, cur_index - 1, next_index);
+            cur_index := next_index;
+            continue;
+          end else
+            l := new LPascalIdentifier();
           isNotFind := false;
         end;
         
-        if isNotFind and isReal(str, cur_index, next_index) then
+        if isNotFind and RealNumber(str, cur_index, next_index) then
         begin
           l := new LPascalNReal();
           isNotFind := false;
         end;
         
-        if isNotFind and isInteger(str, cur_index, next_index) then
+        if isNotFind and IntegerNumber(str, cur_index, next_index) then
         begin
           if SafeLastLexemValueComp(lexemes, Relation_.Equal, '#') then
           begin
@@ -203,7 +204,7 @@ type
           isNotFind := false;
         end;
         
-        if isNotFind and isString(str, cur_index, next_index) then
+        if isNotFind and StringValue(str, cur_index, next_index) then
         begin
           l := new LPascalString();
           isNotFind := false;
@@ -233,79 +234,96 @@ type
       lexemes.Add(l);
     end;
     
-    static function isLetter(str: string; cur_pos: integer): boolean;
+    /// Letter = "A" | "B" | "C" | "D" | "E" | "F" | "G"
+    ///        | "H" | "I" | "J" | "K" | "L" | "M" | "N"
+    ///        | "O" | "P" | "Q" | "R" | "S" | "T" | "U"
+    ///        | "V" | "W" | "X" | "Y" | "Z" | "a" | "b"
+    ///        | "c" | "d" | "e" | "f" | "g" | "h" | "i"
+    ///        | "j" | "k" | "l" | "m" | "n" | "o" | "p"
+    ///        | "q" | "r" | "s" | "t" | "u" | "v" | "w"
+    ///        | "x" | "y" | "z" | "_" ;
+    static function Letter(str: string; cur_pos: integer): boolean;
     begin
       Result := SafeCharIn(str, cur_pos, letters);
     end;
     
-    static function isDigit(str: string; cur_pos: integer): boolean;
+    /// Digit = "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" ;
+    static function Digit(str: string; cur_pos: integer): boolean;
     begin
       Result := SafeCharIn(str, cur_pos, digits);
     end;
     
-    static function isIdentifier(str: string; cur_pos: integer; var next_pos: integer): boolean;
+    /// Identifier = letter , { letter | digit } ;
+    static function Identifier(str: string; cur_pos: integer; var next_pos: integer): boolean;
     begin
-      if isLetter(str, cur_pos) then 
+      if Letter(str, cur_pos) then 
       begin
         Result := true;
         next_pos := cur_pos + 1;
-        while(isLetter(str, next_pos) or isDigit(str, next_pos)) do
+        while(Letter(str, next_pos) or Digit(str, next_pos)) do
           next_pos += 1;
       end
       else Result := false;
     end;
     
-    static function isInteger(str: string; cur_pos: integer; var next_pos: integer): boolean;
+    /// IntegerNumber = digit, { digit } ;
+    static function IntegerNumber(str: string; cur_pos: integer; var next_pos: integer): boolean;
     begin
-      if isDigit(str, cur_pos) then 
+      if Digit(str, cur_pos) then 
       begin
         Result := true;
         next_pos := cur_pos + 1;
-        while(isDigit(str, next_pos)) do
+        while(Digit(str, next_pos)) do
           next_pos += 1;
       end
       else Result := false;
     end;
     
-    static function isExpDesignator(str: string; cur_pos: integer): boolean;
+    /// ExpDesignator = "e" | "E" ;
+    static function ExpDesignator(str: string; cur_pos: integer): boolean;
     begin
       var str_cur_pos := str[cur_pos];
       Result := (str_cur_pos = 'e') or (str_cur_pos = 'E');
     end;
     
-    static function isExponent(str: string; cur_pos: integer; var next_pos: integer): boolean;
+    /// Exponent = ExpDesignator, [ "+" | "-" ], IntegerNumber ;
+    static function Exponent(str: string; cur_pos: integer; var next_pos: integer): boolean;
     begin
-      if isExpDesignator(str, cur_pos) then 
+      if ExpDesignator(str, cur_pos) then 
       begin
         var t := cur_pos + 1;
         var _chr := str[next_pos];
         if (_chr = '+') or (_chr = '-') then
           t += 1;
-        Result := isInteger(str, t, next_pos);
+        Result := IntegerNumber(str, t, next_pos);
         exit;
       end;
       Result := false;
     end;
     
-    static function isReal(str: string; cur_pos: integer; var next_pos: integer): boolean;
+    /// RealNumber = IntegerNumber, ".", IntegerNumber, Exponent ;
+    static function RealNumber(str: string; cur_pos: integer; var next_pos: integer): boolean;
     begin
-      if isInteger(str, cur_pos, next_pos) then 
+      if IntegerNumber(str, cur_pos, next_pos) then 
         if SafeCharComp(str, next_pos, Relation_.Equal, '.') then
-          if isInteger(str, next_pos + 1, next_pos) then
+          if IntegerNumber(str, next_pos + 1, next_pos) then
           begin
             Result := true;
-            isExponent(str, next_pos, next_pos);
+            Exponent(str, next_pos, next_pos);
             exit;
           end;
       Result := false;
     end;
     
-    static function isNumber(str: string; cur_pos: integer; var next_pos: integer): boolean;
+    /// Number = RealNumber | IntegerNumber ;
+    static function Number(str: string; cur_pos: integer; var next_pos: integer): boolean;
     begin
-      Result := isInteger(str, cur_pos, next_pos) or isReal(str, cur_pos, next_pos);
+      Result := RealNumber(str, cur_pos, next_pos) or IntegerNumber(str, cur_pos, next_pos);
     end;
     
-    static function isString(str: string; cur_pos: integer; var next_pos: integer): boolean;
+    /// StringValue = '"', { all_characters - '"' }, '"' 
+    ///             | "'", { all_characters - ''' }, "'" ;
+    static function StringValue(str: string; cur_pos: integer; var next_pos: integer): boolean;
     begin
       var ch := #39; //'
       if (str[cur_pos] <> ch) then
@@ -322,16 +340,28 @@ type
       Result := false;
     end;
     
-    static function isReserved(str: string; cur_pos: integer; var next_pos: integer): boolean;
+    /// Reserved = "and" | "downto" | "if" | "or" | "then" | "array" | "else"
+    ///          | "in" | "packed" | "to" | "begin" | "end" | "label" | "procedure"
+    ///          | "type" | "case" | "file" | "mod" | "program" | "until" | "const"
+    ///          | "for" | "nil" | "record" | "var" | "div" | "function" | "not"
+    ///          | "repeat" | "while" | "do" | "goto" | "of" | "set" | "with"
+    ///          | "class" | "private" | "public" | "protected" | "internal"
+    ///          | "constructor" | "destructor" | "property" | "auto" | "sealed"
+    ///          | "abstract" | "forward" | "extensionmethod" | "default" | "try"
+    ///          | "except" | "finally" | "on" | "operator" | "static" ;
+    static function Reserved(str: string; cur_pos: integer; var next_pos: integer): boolean;
     begin
       Result := false;
-      if isIdentifier(str, cur_pos, next_pos) then
+      if Identifier(str, cur_pos, next_pos) then
       begin
-        Result := str.Substring(cur_pos - 1, next_pos - cur_pos).ToLower() in reserved;
+        Result := str.Substring(cur_pos - 1, next_pos - cur_pos).ToLower() in reserved_words;
       end;
     end;
     
-    static function isSymbol(str: string; cur_pos: integer; var next_pos: integer): boolean;
+    /// Symbol = ":=" | "+=" | "-=" | "*=" | "/=" | "<=" | "<>" | ">=" | ".." 
+    ///        | "," | "." | ";" | ":" | "^" | "(" | ")" | "[" | "]" | "<" 
+    ///        | ">" | "=" | "+" | "-" | "*" | "/" | "$" | "@" | "&" | "#" ;
+    static function Symbol(str: string; cur_pos: integer; var next_pos: integer): boolean;
     begin
       var cur_char := str[cur_pos];
       Result := cur_char in simblos;
@@ -403,10 +433,11 @@ const
   Add_Operator = ['+', '-', 'or', 'xor'];
   _Relation_ = ['=', '<>', '<', '>', '<=', '>=', 'in', 'is'];
   Assign_Operator = [':=', '+=', '-=', '*=', '/='];
-  Operator_4_Overloading = Unary_Operator + Mult_Operator + Add_Operator + _Relation_ - ['is'] + ['implicit', 'explicit'];
+  
+  /// OperatorForOverloading = "+" | "-" | "not" | "@" | "^" | "*" | "/" | "div" | "mod" | "and" | "shl" | "shr"
+  ///                        | "or" | "xor" | "=" | "<>" | "<" | ">" | "<=" | ">=" | "in" | "implicit" | "explicit" ;
+  OperatorForOverloading = Unary_Operator + Mult_Operator + Add_Operator + _Relation_ - ['is'] + ['implicit', 'explicit'];
   class_prefix = ['auto', 'sealed', 'abstract'];
-  //pre_declarations = ['forward', 'extensionmethod'];
-
 
 function AssociativeToLeft(n: node): node;
 begin
@@ -428,21 +459,23 @@ begin
     Result.AddNode(n[0]);
 end;
 
+/// UnaryOperator = "+" | "-" | "not" | "@" | "^" ;
 function UnaryOperator(lexemes: List<lexem>; cur_pos: integer; upper_command: node): boolean;
 begin
-  Result := lexemes[cur_pos].value in Unary_Operator;
+  Result := SafeLexemComp(lexemes, cur_pos, Relation_.InSet, Unary_Operator);
   if Result then
     upper_command.AddNode('UnaryOperator').AddNode($' {lexemes[cur_pos].value}');
 end;
 
+/// MultOperator = "*" | "/" | "div" | "mod" | "and" | "shl" | "shr" ;
 function MultOperator(lexemes: List<lexem>; cur_pos: integer; upper_command: node): boolean;
 begin
-  
   Result := SafeLexemComp(lexemes, cur_pos, Relation_.InSet, Mult_Operator);
   if Result then
     upper_command.AddNode('MultOperator').AddNode($' {lexemes[cur_pos].value}');
 end;
 
+/// AddOperator = "+" | "-" | "or" | "xor" ;
 function AddOperator(lexemes: List<lexem>; cur_pos: integer; upper_command: node): boolean;
 begin
   Result := SafeLexemComp(lexemes, cur_pos, Relation_.InSet, Add_Operator);
@@ -450,6 +483,7 @@ begin
     upper_command.AddNode('AddOperator').AddNode($' {lexemes[cur_pos].value}');
 end;
 
+/// Relation = "=" | "<>" | "<" | ">" | "<=" | ">=" | "in" | "is" ;
 function Relation(lexemes: List<lexem>; cur_pos: integer; upper_command: node): boolean;
 begin
   Result := SafeLexemComp(lexemes, cur_pos, Relation_.InSet, _Relation_);
@@ -457,82 +491,40 @@ begin
     upper_command.AddNode('Relation').AddNode($' {lexemes[cur_pos].value}');
 end;
 
+/// AssignmentOperator = ":=" | "+=" | "-=" | "*=" | "/=" ;
 function AssignmentOperator(lexemes: List<lexem>; cur_pos: integer; upper_command: node): boolean;
 begin
-  Result := lexemes[cur_pos].value in Assign_Operator;
+  Result := SafeLexemComp(lexemes, cur_pos, Relation_.InSet, Assign_Operator);
   if Result then
     upper_command.AddNode('AssignmentOperator').AddNode($' {lexemes[cur_pos].value}');
 end;
 
 // <Gramar>
-/// IdentList --> yident {',' yident}
 function IdentList(lexemes: List<lexem>; cur_pos: integer; var next_pos: integer; upper_command: node): boolean; forward;
 
-/// Parameters --> '(' IdentList ')' 
 function Parameters(lexemes: List<lexem>; cur_pos: integer; var next_pos: integer; upper_command: node): boolean; forward;
 
 function &Type(lexemes: List<lexem>; cur_pos: integer; var next_pos: integer; upper_command: node): boolean; forward;
 
-function ConstFactor(lexemes: List<lexem>; cur_pos: integer; var next_pos: integer; upper_command: node): boolean; forward;
-
 function Subrange(lexemes: List<lexem>; cur_pos: integer; var next_pos: integer; upper_command: node): boolean; forward;
 
-/// VariableDecl --> yident ':' Type ':=' Expression
-///                | yident ':=' Expression
-///                | IdentList ':' Type
 function VariableDecl(lexemes: List<lexem>; cur_pos: integer; var next_pos: integer; upper_command: node): boolean; forward;
 
-/// StatementSequence --> ybegin Statement {';' Statement} [ ';' ] yend 
 function StatementSequence(lexemes: List<lexem>; cur_pos: integer; var next_pos: integer; upper_command: node): boolean; forward;
 
 function Block(lexemes: List<lexem>; cur_pos: integer; var next_pos: integer; upper_command: node): boolean; forward;
 
-function ConstExpression(lexemes: List<lexem>; cur_pos: integer; var next_pos: integer; upper_command: node): boolean; forward;
-
-/// ActualParameters --> '(' ExpList ')'
 function ActualParameters(lexemes: List<lexem>; cur_pos: integer; var next_pos: integer; upper_command: node): boolean; forward;
 
-/// Expression --> SimpleExpression [ Relation SimpleExpression ]
 function Expression(lexemes: List<lexem>; cur_pos: integer; var next_pos: integer; upper_command: node): boolean; forward;
 
-/// Designator --> yident [ DesignatorStuff ] 
 function Designator(lexemes: List<lexem>; cur_pos: integer; var next_pos: integer; upper_command: node): boolean; forward;
 
-/// DesignatorStuff --> ('.' yident | '[' ExpList ']' | '^')
 function DesignatorStuff(lexemes: List<lexem>; cur_pos: integer; var next_pos: integer; upper_command: node): boolean; forward;
 
-/// Statement --> Assignment
-///             | ProcedureCall
-///             | IfStatement
-///             | CaseStatement
-///             | WhileStatement
-///             | RepeatStatement
-///             | ForStatement
-///             | IOStatement
-///             | MemoryStatement
-///             | StatementSequence
 function Statement(lexemes: List<lexem>; cur_pos: integer; var next_pos: integer; upper_command: node): boolean; forward;
 
-(*/// PreDeclaration --> # forward | extensionmethod # {';' # forward | extensionmethod #}
-function PreDeclaration(lexemes: List<lexem>; cur_pos: integer; var next_pos: integer): boolean;
-begin
-  Result := false;
-  var &set: set of string := pre_declarations;
-  Result := (lexemes[cur_pos].value in &set);
-  if Result then
-  begin
-    Exclude(&set, lexemes[cur_pos].value);
-    cur_pos += 1;
-    while (lexemes[cur_pos].value = ';') and (lexemes[cur_pos + 1].value in &set) do
-    begin
-      Exclude(&set, lexemes[cur_pos + 1].value);
-      cur_pos += 2;
-    end;
-    next_pos := cur_pos;
-  end;
-end;*)
-
-/// OneFormalParam --> [yvar] IdentList ':' Type
+/// OneFormalParam = [ "var" ], IdentList, ":", Type ;
 function OneFormalParam(lexemes: List<lexem>; cur_pos: integer; var next_pos: integer; upper_command: node): boolean;
 begin
   var cur_command := new node('OneFormalParam');
@@ -549,7 +541,7 @@ begin
     upper_command.AddNode(cur_command);
 end;
 
-/// FormalParameters --> '(' OneFormalParam {';' OneFormalParam} ')'
+/// FormalParameters = "(", OneFormalParam, { ";", OneFormalParam }, ")" ;
 function FormalParameters(lexemes: List<lexem>; cur_pos: integer; var next_pos: integer; upper_command: node): boolean;
 begin
   var cur_command := new node('FormalParameters');
@@ -570,8 +562,7 @@ begin
   end;
 end;
 
-/// FunctionHeading --> ['static'] 'function' Designator [FormalParameters]
-///                   | ['static'] 'function' operator OperatorForOverloading [FormalParameters]
+/// FunctionHeading = [ "static" ], "function", ( Designator | ( "operator", OperatorForOverloading ) ), [ FormalParameters ] ;
 function FunctionHeading(lexemes: List<lexem>; cur_pos: integer; var next_pos: integer; upper_command: node): boolean;
 begin
   var cur_command := new node('FunctionHeading');
@@ -589,7 +580,7 @@ begin
       cur_pos := next_pos;
     end else
     if (lexemes[cur_pos + 1].value = 'operator') and
-      (lexemes[cur_pos + 2].value in Operator_4_Overloading) then
+      (lexemes[cur_pos + 2].value in OperatorForOverloading) then
     begin
       Result := true;
       cur_command.AddNode('operator').AddNode($' {lexemes[cur_pos + 2].value}');
@@ -604,8 +595,7 @@ begin
   end;
 end;
 
-/// ProcedureHeading --> ['static'] 'procedure' Designator [FormalParameters] 
-///                    | ['static'] 'procedure' operator AssignmentOperator [FormalParameters] 
+/// ProcedureHeading = ["static"], "procedure", ( Designator | ( "operator", AssignmentOperator ) ), [ FormalParameters ] ;
 function ProcedureHeading(lexemes: List<lexem>; cur_pos: integer; var next_pos: integer; upper_command: node): boolean;
 begin
   var cur_command := new node('ProcedureHeading');
@@ -638,8 +628,7 @@ begin
   end;
 end;
 
-/// FunctionDecl --> FunctionHeading ':' Type ';' forward
-///                | FunctionHeading ':' Type ';' ['extensionmethod' ';'] Block
+/// FunctionDecl = FunctionHeading, ":", Type, ";" ( "forward" | ( [ "extensionmethod",  ";" ], Block ) ) ;
 function FunctionDecl(lexemes: List<lexem>; cur_pos: integer; var next_pos: integer; upper_command: node): boolean;
 begin
   var cur_command := new node('FunctionDecl');
@@ -669,8 +658,7 @@ begin
   end;
 end;
 
-/// ProcedureDecl --> ProcedureHeading ';' ['extensionmethod' ';'] Block
-///                 | ProcedureHeading ';' forward
+/// ProcedureDecl = ProcedureHeading, ";", ( "forward" | ( [ "extensionmethod", ";" ], Block ) ) ;
 function ProcedureDecl(lexemes: List<lexem>; cur_pos: integer; var next_pos: integer; upper_command: node): boolean;
 begin
   var cur_command := new node('ProcedureDecl');
@@ -698,7 +686,7 @@ begin
   end;
 end;
 
-/// SubprogDeclList --> (ProcedureDecl ';' | FunctionDecl ';')
+/// SubprogDeclList = ( ProcedureDecl | FunctionDecl ), ";", { ( ProcedureDecl | FunctionDecl ), ";" } ;
 function SubprogDeclList(lexemes: List<lexem>; cur_pos: integer; var next_pos: integer; upper_command: node): boolean;
 begin
   var cur_command := new node('SubprogDeclList');
@@ -716,7 +704,7 @@ begin
     upper_command.AddNode(cur_command);
 end;
 
-/// Element --> ConstExpression ['..' ConstExpression ]
+/// Element = ConstExpression, [ "..", ConstExpression ] ;
 function Element(lexemes: List<lexem>; cur_pos: integer; var next_pos: integer; upper_command: node): boolean;
 begin
   var cur_command := new node('Element');
@@ -730,8 +718,8 @@ begin
   end;
 end;
 
-/// FunctionCall --> Designator ActualParameters
-///                | new Type [ActualParameters]
+/// FunctionCall = Designator, ActualParameters
+///              | "new", Type, [ ActualParameters ] ;
 function FunctionCall(lexemes: List<lexem>; cur_pos: integer; var next_pos: integer; upper_command: node): boolean;
 begin
   var cur_command := new node('FunctionCall');
@@ -751,7 +739,7 @@ begin
     upper_command.AddNode(cur_command);
 end;
 
-/// SetValue --> '[' [Element {',' Element} ] ']' 
+/// SetValue = "[", [ Element, { ",", Element } ], "]" ;
 function SetValue(lexemes: List<lexem>; cur_pos: integer; var next_pos: integer; upper_command: node): boolean;
 begin
   var cur_command := new node('SetValue');
@@ -775,41 +763,40 @@ begin
   end;
 end;
 
-/// Factor --> # ynumber | ystring | $ ystring | ytrue | yfalse | ynil | '(' Expression ')' | FunctionCall | ynot Factor | Setvalue | Designator # [DesignatorStuff]
+/// Factor = ( FunctionCall | SetValue | Number | StringValue | "$", StringValue | "nil" | Identifier | "(", Expression, ")" ), [ DesignatorStuff ] ;
 function Factor(lexemes: List<lexem>; cur_pos: integer; var next_pos: integer; upper_command: node): boolean;
 begin
   var cur_command := new node('Factor');
-  Result := (lexemes[cur_pos] is LPascalNumber) or
-    (lexemes[cur_pos] is LPascalString) or 
-    (lexemes[cur_pos].value = 'true') or 
-    (lexemes[cur_pos].value = 'false') or 
-    (lexemes[cur_pos].value = 'nil');
-  if Result then
+  Result := FunctionCall(lexemes, cur_pos, next_pos, cur_command) or
+    SetValue(lexemes, cur_pos, next_pos, cur_command);
+  if not Result then
   begin
-    next_pos := cur_pos + 1;
-    cur_command.AddNode(lexemes[cur_pos].value);
-  end
-  else
-  begin
-    Result := 
-      (lexemes[cur_pos].value = '$') and
-      (lexemes[cur_pos + 1] is LPascalString);
+    Result := (lexemes[cur_pos] is LPascalNumber) or
+      (lexemes[cur_pos] is LPascalString) or 
+      (lexemes[cur_pos].value = 'nil') or
+      (lexemes[cur_pos] is LPascalIdentifier);
     if Result then
     begin
-      cur_command.AddNode('$' + lexemes[cur_pos + 1].value);
-      next_pos := cur_pos + 2;
-    end
-    else
+      next_pos := cur_pos + 1;
+      cur_command.AddNode(lexemes[cur_pos].value)
+    end else
     begin
-      Result := (lexemes[cur_pos].value = '(') and 
-        Expression(lexemes, cur_pos + 1, next_pos, cur_command) and 
-        (lexemes[next_pos].value = ')');
+      Result := 
+        (lexemes[cur_pos].value = '$') and
+        (lexemes[cur_pos + 1] is LPascalString);
       if Result then
-        next_pos := next_pos + 1
+      begin
+        cur_command.AddNode('$' + lexemes[cur_pos + 1].value);
+        next_pos := cur_pos + 2;
+      end
       else
-        Result := FunctionCall(lexemes, cur_pos, next_pos, cur_command) or
-          SetValue(lexemes, cur_pos, next_pos, cur_command) or
-          Designator(lexemes, cur_pos, next_pos, cur_command);
+      begin
+        Result := (lexemes[cur_pos].value = '(') and 
+          Expression(lexemes, cur_pos + 1, next_pos, cur_command) and 
+          (lexemes[next_pos].value = ')');
+        if Result then
+          next_pos := next_pos + 1;
+      end;
     end;
   end;
   if Result then
@@ -821,7 +808,9 @@ begin
   end;
 end;
 
-/// Term --> Factor {MultOperator Factor} 
+/// Term = Factor
+///      | Factor, MultOperator, Factor
+///      | Term, MultOperator, Factor ;
 function Term(lexemes: List<lexem>; cur_pos: integer; var next_pos: integer; upper_command: node): boolean;
 begin
   var cur_command := new node('Term');
@@ -836,7 +825,9 @@ begin
   end;
 end;
 
-/// SimpleExpression --> [UnaryOperator] AssociativeToLeft(Term) {AddOperator AssociativeToLeft(Term)} 
+/// SimpleExpression = [ UnaryOperator ], Term
+///                  | [ UnaryOperator ], Term, AddOperator, Term
+///                  | SimpleExpression, AddOperator, Term ;
 function SimpleExpression(lexemes: List<lexem>; cur_pos: integer; var next_pos: integer; upper_command: node): boolean;
 begin
   var cur_command := new node('SimpleExpression');
@@ -856,7 +847,7 @@ begin
   end;
 end;
 
-/// Expression --> AssociativeToLeft(SimpleExpression) [Relation AssociativeToLeft(SimpleExpression)]
+/// Expression = SimpleExpression, [ Relation, SimpleExpression ] ;
 function Expression(lexemes: List<lexem>; cur_pos: integer; var next_pos: integer; upper_command: node): boolean;
 begin
   var cur_command := new node('Expression');
@@ -873,7 +864,8 @@ begin
   end;
 end;
 
-/// MemoryStatement --> ynew '(' yident ')' | ydispose '(' yident ')'
+/// MemoryStatement = "new", "(", Identifier, ")"
+///                 | "dispose", "(", Identifier, ")" ;
 function MemoryStatement(lexemes: List<lexem>; cur_pos: integer; var next_pos: integer; upper_command: node): boolean;
 begin
   var cur_command := new node('MemoryStatement');
@@ -892,7 +884,7 @@ begin
   end;
 end;
 
-/// ExpList --> Expression { ',' Expression } 
+/// ExpList = Expression, { ",", Expression } ;
 function ExpList(lexemes: List<lexem>; cur_pos: integer; var next_pos: integer; upper_command: node): boolean;
 begin
   var cur_command := new node('ExpList');
@@ -907,7 +899,7 @@ begin
   end;
 end;
 
-/// ActualParameters --> '(' [ExpList] ')'
+/// ActualParameters = "(", [ ExpList ], ")" ;
 function ActualParameters(lexemes: List<lexem>; cur_pos: integer; var next_pos: integer; upper_command: node): boolean;
 begin
   var cur_command := new node('ActualParameters');
@@ -926,7 +918,7 @@ begin
   end;
 end;
 
-/// DesignatorStuff --> #'.' yident [ActualParameters] | '[' ExpList ']' | '^'# [DesignatorStuff]
+/// DesignatorStuff = ( ".", Identifier, [ ActualParameters ] | "[", ExpList, "]" | "^" ), [ DesignatorStuff ] ;
 function DesignatorStuff(lexemes: List<lexem>; cur_pos: integer; var next_pos: integer; upper_command: node): boolean;
 begin
   var cur_command := new node('DesignatorStuff');
@@ -963,7 +955,7 @@ begin
   end;
 end;
 
-/// Designator --> yident [ DesignatorStuff ] 
+/// Designator = Identifier, [ DesignatorStuff ] ;
 function Designator(lexemes: List<lexem>; cur_pos: integer; var next_pos: integer; upper_command: node): boolean;
 begin
   var cur_command := new node('Designator');
@@ -977,7 +969,7 @@ begin
   end;
 end;
 
-/// DesignatorList --> Designator {',' Designator } 
+/// DesignatorList = Designator, { "," Designator } ;
 function DesignatorList(lexemes: List<lexem>; cur_pos: integer; var next_pos: integer; upper_command: node): boolean;
 begin
   var cur_command := new node('DesignatorList');
@@ -992,10 +984,10 @@ begin
   end;
 end;
 
-/// IOStatement --> yread '(' DesignatorList ')'
-///               | ywrite '(' ExpList ')'
-///               | yreadln [ '(' DesignatorList ')' ]
-///               | ywriteln [ '(' ExpList ')' ] 
+/// IOStatement = "read", "(", DesignatorList, ")"
+///             | "write", "(", ExpList, ")"
+///             | "readln", [ "(", DesignatorList, ")" ]
+///             | "writeln", [ "(", ExpList, ")" ] ;
 function IOStatement(lexemes: List<lexem>; cur_pos: integer; var next_pos: integer; upper_command: node): boolean;
 begin
   Result := false;
@@ -1047,7 +1039,7 @@ begin
     upper_command.AddNode(cur_command);
 end;
 
-/// WhichWay --> yto | ydownto
+/// WhichWay = "to" | "downto" ;
 function WhichWay(lexemes: List<lexem>; cur_pos: integer; var next_pos: integer; upper_command: node): boolean;
 begin
   Result := (lexemes[cur_pos].value = 'to') or 
@@ -1059,7 +1051,7 @@ begin
   end;
 end;
 
-/// ForStatement --> yfor [var] yident ':=' Expression WhichWay Expression ydo Statement
+/// ForStatement = "for", [ "var" ], Identifier, ":=", Expression, WhichWay, Expression, "do", Statement ;
 function ForStatement(lexemes: List<lexem>; cur_pos: integer; var next_pos: integer; upper_command: node): boolean;
 begin
   var cur_command := new node('ForStatement');
@@ -1085,7 +1077,7 @@ begin
     upper_command.AddNode(cur_command);
 end;
 
-/// RepeatStatement --> yrepeat [ Statement {';' Statement} [';'] ] yuntil Expression
+/// RepeatStatement = "repeat", [ Statement, { ";", Statement }, [ ";" ] ], "until", Expression ;
 function RepeatStatement(lexemes: List<lexem>; cur_pos: integer; var next_pos: integer; upper_command: node): boolean;
 begin
   var cur_command := new node('RepeatStatement');
@@ -1109,7 +1101,7 @@ begin
   end;
 end;
 
-/// WhileStatement --> ywhile Expression ydo Statement
+/// WhileStatement = "while", Expression, "do", Statement ;
 function WhileStatement(lexemes: List<lexem>; cur_pos: integer; var next_pos: integer; upper_command: node): boolean;
 begin
   var cur_command := new node('WhileStatement');
@@ -1122,7 +1114,7 @@ begin
     upper_command.AddNode(cur_command);
 end;
 
-/// CaseLabelList --> ConstExpression {',' ConstExpression }
+/// CaseLabelList = Expression, { ",", Expression } ;
 function CaseLabelList(lexemes: List<lexem>; cur_pos: integer; var next_pos: integer; upper_command: node): boolean;
 begin
   var cur_command := new node('CaseLabelList');
@@ -1131,14 +1123,14 @@ begin
   begin
     repeat
       cur_pos := next_pos;
-    until not ((lexemes[cur_pos].value = ',') and ConstExpression(lexemes, cur_pos + 1, next_pos, cur_command));
+    until not ((lexemes[cur_pos].value = ',') and Expression(lexemes, cur_pos + 1, next_pos, cur_command));
     next_pos := cur_pos;
   end;
   if Result then
     upper_command.AddNode(cur_command);
 end;
 
-/// Case --> CaseLabelList ':' Statement 
+/// Case = CaseLabelList, ":", Statement ;
 function &Case(lexemes: List<lexem>; cur_pos: integer; var next_pos: integer; upper_command: node): boolean;
 begin
   var cur_command := new node('Case');
@@ -1150,7 +1142,7 @@ begin
     upper_command.AddNode(cur_command);
 end;
 
-/// CaseStatement --> ycase Expression yof Case {';' Case} [';'] yend
+/// CaseStatement = "case", Expression, "of", Case, { ";", Case }, [ ";" ], "end" ;
 function CaseStatement(lexemes: List<lexem>; cur_pos: integer; var next_pos: integer; upper_command: node): boolean;
 begin
   var cur_command := new node('CaseStatement');
@@ -1175,7 +1167,7 @@ begin
   end;
 end;
 
-/// IfStatement --> yif Expression ythen Statement [yelse Statement] 
+/// IfStatement = "if", Expression, "then", Statement, [ "else", Statement ] ;
 function IfStatement(lexemes: List<lexem>; cur_pos: integer; var next_pos: integer; upper_command: node): boolean;
 begin
   var cur_command := new node('IfStatement');
@@ -1194,7 +1186,7 @@ begin
     upper_command.AddNode(cur_command);
 end;
 
-/// ProcedureCall --> Designator [ActualParameters] 
+/// ProcedureCall = Designator, [ ActualParameters ] ;
 function ProcedureCall(lexemes: List<lexem>; cur_pos: integer; var next_pos: integer; upper_command: node): boolean;
 begin
   var cur_command := new node('ProcedureCall');
@@ -1208,7 +1200,7 @@ begin
   end;
 end;
 
-/// Assignment --> Designator #':='|'+='|'-='|'*='|'/='# Expression 
+/// Assignment = Designator, AssignmentOperator, Expression ;
 function Assignment(lexemes: List<lexem>; cur_pos: integer; var next_pos: integer; upper_command: node): boolean;
 begin
   var cur_command := new node('Assignment');
@@ -1222,46 +1214,46 @@ begin
   end;
 end;
 
-/// ExceptionProcBlock --> (on [Ident ':'] Type 'do' Statement ';')+ ['else' Statement ';']
-///                      | {Statement ';'}
+/// ExceptionProc = "on", [ Identifier, ":" ], Type, "do", Statement ;
+function ExceptionProc(lexemes: List<lexem>; cur_pos: integer; var next_pos: integer; upper_command: node): boolean;
+begin
+  Result := false;
+  var cur_command := new node('ExceptionProc');
+  if (lexemes[cur_pos].value = 'on') then
+  begin
+    cur_pos += 1;
+    if (lexemes[cur_pos] is LPascalIdentifier) and
+        (lexemes[cur_pos + 1].value = ':') then
+    begin
+      cur_command.AddNode(lexemes[cur_pos].value);
+      cur_pos += 2;
+    end;
+    if &Type(lexemes, cur_pos, next_pos, cur_command) and
+    (lexemes[next_pos].value = 'do') and
+    Statement(lexemes, next_pos + 1, next_pos, cur_command) then
+    begin
+      Result := true;
+      cur_pos := next_pos + 1
+    end;
+  end;
+end;
+
+/// ExceptionProcBlock = ExceptionProc, { ";", ExceptionProc }, [ [ ";" ] "else", Statement ]
+///                    | Statement, { ";", Statement } ;
 function ExceptionProcBlock(lexemes: List<lexem>; cur_pos: integer; var next_pos: integer; upper_command: node): boolean;
 begin
   var cur_command := new node('ExceptionProcBlock');
-  Result := true;
-  if (lexemes[cur_pos].value = 'on') then
+  if ExceptionProc(lexemes, cur_pos, next_pos, cur_command) then
   begin
-    while true do
-    begin
-      if (lexemes[cur_pos].value = 'on') then
-      begin
-        cur_pos += 1;
-        var sub_command := cur_command.AddNode('on');
-        if (lexemes[cur_pos] is LPascalIdentifier) and
-        (lexemes[cur_pos + 1].value = ':') then
-        begin
-          sub_command.AddNode(lexemes[cur_pos].value);
-          cur_pos += 2;
-        end;
-        if &Type(lexemes, cur_pos, next_pos, sub_command) and
-        (lexemes[next_pos].value = 'do') and
-        Statement(lexemes, next_pos + 1, next_pos, sub_command) and
-        (lexemes[next_pos].value = ';') then
-        begin
-          cur_pos := next_pos + 1;
-          continue;
-        end
-        else begin
-          Result := false;
-          exit;
-        end;
-      end;
-      break;
-    end;
+    Result := true;
+    repeat
+      cur_pos := next_pos;
+    until not ((lexemes[cur_pos].value = ';') and ExceptionProc(lexemes, cur_pos + 1, next_pos, cur_command));
+    if (lexemes[cur_pos].value = ';') then
+      cur_pos += 1;
     if (lexemes[cur_pos].value = 'else') then
-      if Statement(lexemes, cur_pos + 1, next_pos, cur_command.AddNode('else')) and
-      (lexemes[next_pos].value = ';') then
+      if Statement(lexemes, cur_pos + 1, next_pos, cur_command.AddNode('else')) then
       begin
-        next_pos += 1;
         upper_command.AddNode(cur_command);
         exit;
       end
@@ -1269,17 +1261,19 @@ begin
         Result := false;
         exit;
       end
-  end
-  else begin
-    while (Statement(lexemes, cur_pos, next_pos, cur_command) and (lexemes[next_pos].value = ';')) do
-      cur_pos := next_pos + 1;
+  end else
+  if Statement(lexemes, cur_pos, next_pos, cur_command) then
+  begin
+    Result := true;
+    repeat
+      cur_pos := next_pos;
+    until not ((lexemes[cur_pos].value = ';') and Statement(lexemes, cur_pos + 1, next_pos, cur_command));
   end;
   next_pos := cur_pos;
   upper_command.AddNode(cur_command);
 end;
 
-/// TryStatement --> 'try' {Statement ';'} 'except' ExceptionProcBlock 'end'
-///                | 'try' {Statement ';'} 'finally'  {Statement ';'} 'end'
+/// TryStatement --> "try", [ Statement, { ";", Statement} ], [ ";" ], ( "except", ExceptionProcBlock | "finally", [ Statement, { ";", Statement } ] ), [ ";" ], "end" ;
 function TryStatement(lexemes: List<lexem>; cur_pos: integer; var next_pos: integer; upper_command: node): boolean;
 begin
   var cur_command := new node('TryStatement');
@@ -1287,22 +1281,36 @@ begin
   if (lexemes[cur_pos].value = 'try') then
   begin
     cur_pos += 1;
-    while (Statement(lexemes, cur_pos, next_pos, cur_command) and (lexemes[next_pos].value = ';')) do
-      cur_pos := next_pos + 1;
+    if Statement(lexemes, cur_pos, next_pos, cur_command) then
+    begin
+      repeat
+        cur_pos := next_pos;
+      until not ((lexemes[cur_pos].value = ';') and Statement(lexemes, cur_pos + 1, next_pos, cur_command));
+    end;
+    if (lexemes[cur_pos].value = ';') then
+      cur_pos += 1;
     if (lexemes[cur_pos].value = 'except') then
     begin
       cur_pos += 1;
-      Result := ExceptionProcBlock(lexemes, cur_pos, next_pos, cur_command.AddNode('except'));
-      cur_pos := next_pos;
+      if ExceptionProcBlock(lexemes, cur_pos, next_pos, cur_command.AddNode('except')) then
+        cur_pos := next_pos;
+      Result := true;
     end
     else if (lexemes[cur_pos].value = 'finally') then
     begin
       cur_pos += 1;
       var sub_command := cur_command.AddNode('finally');
-      while (Statement(lexemes, cur_pos, next_pos, sub_command) and (lexemes[next_pos].value = ';')) do
-        cur_pos := next_pos + 1;
+      if Statement(lexemes, cur_pos, next_pos, sub_command) then
+      begin
+        repeat
+          cur_pos := next_pos;
+        until not ((lexemes[cur_pos].value = ';') and Statement(lexemes, cur_pos + 1, next_pos, sub_command));
+      end;
       Result := true;
+      cur_command.AddNode(sub_command);
     end;
+    if (lexemes[cur_pos].value = ';') then
+      cur_pos += 1;
     Result := Result and (lexemes[cur_pos].value = 'end');
   end;
   if Result then
@@ -1312,18 +1320,18 @@ begin
   end;
 end;
 
-/// Statement --> Assignment
-///             | IOStatement
-///             | ProcedureCall
-///             | IfStatement
-///             | CaseStatement
-///             | WhileStatement
-///             | RepeatStatement
-///             | ForStatement
-///             | MemoryStatement
-///             | var VariableDecl
-///             | TryStatement
-///             | StatementSequence
+/// Statement = Assignment
+///           | IOStatement
+///           | ProcedureCall
+///           | IfStatement
+///           | CaseStatement
+///           | WhileStatement
+///           | RepeatStatement
+///           | ForStatement
+///           | MemoryStatement
+///           | var VariableDecl
+///           | TryStatement
+///           | StatementSequence ;
 function Statement(lexemes: List<lexem>; cur_pos: integer; var next_pos: integer; upper_command: node): boolean;
 begin
   Result := true;
@@ -1344,7 +1352,7 @@ begin
   Result := false;
 end;
 
-/// StatementSequence --> ybegin [Statement {';' Statement} [ ';' ]] yend 
+/// StatementSequence = "begin", [ Statement, { ";", Statement }, [ ";" ] ], "end" ;
 function StatementSequence(lexemes: List<lexem>; cur_pos: integer; var next_pos: integer; upper_command: node): boolean;
 begin
   var cur_command := new node('StatementSequence');
@@ -1369,7 +1377,7 @@ begin
   end;
 end;
 
-/// FieldList --> IdentList ':' Type 
+/// FieldList = IdentList, ":", Type ;
 function FieldList(lexemes: List<lexem>; cur_pos: integer; var next_pos: integer; upper_command: node): boolean;
 begin
   var cur_command := new node('FieldList');
@@ -1381,7 +1389,7 @@ begin
     upper_command.AddNode(cur_command);
 end;
 
-/// FieldListSequence --> FieldList {';' FieldList} 
+/// FieldListSequence = FieldList, { ";", FieldList } ;
 function FieldListSequence(lexemes: List<lexem>; cur_pos: integer; var next_pos: integer; upper_command: node): boolean;
 begin
   var cur_command := new node('FieldListSequence');
@@ -1396,7 +1404,7 @@ begin
   end;
 end;
 
-/// PointerType --> '^' yident
+/// PointerType = "^", Identifier ;
 function PointerType(lexemes: List<lexem>; cur_pos: integer; var next_pos: integer; upper_command: node): boolean;
 begin
   Result :=
@@ -1409,7 +1417,7 @@ begin
   end;
 end;
 
-/// EnumType --> '(' IdentList ')'
+/// EnumType = "(", IdentList, ")" ;
 function EnumType(lexemes: List<lexem>; cur_pos: integer; var next_pos: integer; upper_command: node): boolean;
 begin
   var cur_command := new node('EnumType');
@@ -1424,7 +1432,7 @@ begin
   end;
 end;
 
-/// SetType --> set of Type
+/// SetType = "set", "of", Type ;
 function SetType(lexemes: List<lexem>; cur_pos: integer; var next_pos: integer; upper_command: node): boolean;
 begin
   var cur_command := new node('SetType');
@@ -1436,8 +1444,8 @@ begin
     upper_command.AddNode(cur_command);
 end;
 
-/// ClassPrefix --> yauto [ ysealed ]
-///               | ysealed [ yauto ]
+/// ClassPrefix = "auto", [ "sealed" ]
+///             | "sealed", [ "auto" ] ;
 function ClassPrefix(lexemes: List<lexem>; cur_pos: integer; var next_pos: integer; upper_command: node): boolean;
 begin
   var cur_command := new node('ClassPrefix');
@@ -1457,7 +1465,7 @@ begin
   end;
 end;
 
-/// ClassConstructor --> constructor [ident] [FormalParameters] ';' StatementSequence
+/// ClassConstructor = "constructor", [ Identifier ], [ FormalParameters ], ";", StatementSequence ;
 function ClassConstructor(lexemes: List<lexem>; cur_pos: integer; var next_pos: integer; upper_command: node): boolean;
 begin
   var cur_command := new node('ClassConstructor');
@@ -1479,7 +1487,7 @@ begin
   end;
 end;
 
-/// ClassDestructor --> destructor [ident] ';' StatementSequence
+/// ClassDestructor = "destructor", [ Identifier ], ";", StatementSequence ;
 function ClassDestructor(lexemes: List<lexem>; cur_pos: integer; var next_pos: integer; upper_command: node): boolean;
 begin
   var cur_command := new node('ClassDestructor');
@@ -1499,7 +1507,7 @@ begin
     upper_command.AddNode(cur_command);
 end;
 
-/// AccessModifiers -->  public | protected internal | protected | internal | private protected | private
+/// AccessModifiers =  "public" | "protected", "internal" | "protected" | "internal" | "private", "protected" | "private" ;
 function AccessModifiers(lexemes: List<lexem>; cur_pos: integer; var next_pos: integer; upper_command: node): boolean;
 begin
   var cur_command := new node('AccessModifiers');
@@ -1529,7 +1537,7 @@ begin
     upper_command.AddNode(cur_command);
 end;
 
-/// PropertyReader --> Expression | Designator
+/// PropertyReader = Expression | Designator ;
 function PropertyReader(lexemes: List<lexem>; cur_pos: integer; var next_pos: integer; upper_command: node): boolean;
 begin
   var cur_command := new node('PropertyReader');
@@ -1540,7 +1548,7 @@ begin
     upper_command.AddNode(cur_command);
 end;
 
-/// PropertyWriter -->  Assignment | Designator
+/// PropertyWriter =  Assignment | Designator ;
 function PropertyWriter(lexemes: List<lexem>; cur_pos: integer; var next_pos: integer; upper_command: node): boolean;
 begin
   var cur_command := new node('PropertyWriter');
@@ -1552,8 +1560,7 @@ begin
 end;
 
 
-/// Property -->  property ident [ '[' FieldList ']' ] ":" Type [read PropertyReader] write PropertyWriter [';' default]
-///            |  property ident [ '[' FieldList ']' ] ":" Type read PropertyReader [write PropertyWriter] [';' default]
+/// Property =  "property", Identifier, [ "[", FieldList, "]" ], ":", Type, ( [ "read", PropertyReader ], "write", PropertyWriter | "read", PropertyReader, [ "write", PropertyWriter ] ), [ ";", "default" ] ;
 function &Property(lexemes: List<lexem>; cur_pos: integer; var next_pos: integer; upper_command: node): boolean;
 begin
   var cur_command := new node('Property');
@@ -1590,7 +1597,7 @@ begin
   end;
 end;
 
-(*/// PropertyList -->  Property {";" Property}
+(*/// PropertyList =  Property, { ";", Property } ;
 function PropertyList(lexemes: List<lexem>; cur_pos: integer; var next_pos: integer; upper_command: node): boolean;
 begin
   var cur_command := new node('PropertyList');
@@ -1605,49 +1612,46 @@ begin
   end;
 end;*)
 
-/// ClassSection -->  [ AccessModifiers ] ([';'] ['static'] # FieldList | ProcedureDecl | FunctionDecl | Property | ClassConstructor | ClassDestructor #)
+/// ClassMember =  [ "static" ], ( FieldList | ProcedureDecl | FunctionDecl | Property | ClassConstructor | ClassDestructor ) ;
+function ClassMember(lexemes: List<lexem>; cur_pos: integer; var next_pos: integer; upper_command: node): boolean;
+begin
+  var cur_command := new node('ClassMember');
+  if (lexemes[cur_pos].value = 'static') then
+  begin
+    cur_pos += 1;
+    cur_command.AddNode('static');
+  end;
+  Result := Assignment(lexemes, cur_pos, next_pos, cur_command) or
+  FieldList(lexemes, cur_pos, next_pos, cur_command) or
+  ProcedureDecl(lexemes, cur_pos, next_pos, cur_command) or 
+  FunctionDecl(lexemes, cur_pos, next_pos, cur_command) or
+  &Property(lexemes, cur_pos, next_pos, cur_command) or
+  ClassConstructor(lexemes, cur_pos, next_pos, cur_command) or
+  ClassDestructor(lexemes, cur_pos, next_pos, cur_command);
+  if Result then
+    upper_command.AddNode(cur_command);
+end;
+
+/// ClassSection =  [ AccessModifiers ], ClassMember, { ";", ClassMember } ;
 function ClassSection(lexemes: List<lexem>; cur_pos: integer; var next_pos: integer; upper_command: node): boolean;
 begin
   var cur_command := new node('ClassSection');
   if AccessModifiers(lexemes, cur_pos, next_pos, cur_command) then
     cur_pos := next_pos;
   Result := false;
-  if (lexemes[cur_pos].value = 'static') then
-  begin
-    cur_pos += 1;
-    cur_command.AddNode('static');
-  end;
-  if Assignment(lexemes, cur_pos, next_pos, cur_command) or
-  FieldList(lexemes, cur_pos, next_pos, cur_command) or
-  ProcedureDecl(lexemes, cur_pos, next_pos, cur_command) or 
-  FunctionDecl(lexemes, cur_pos, next_pos, cur_command) or
-  &Property(lexemes, cur_pos, next_pos, cur_command) or
-  ClassConstructor(lexemes, cur_pos, next_pos, cur_command) or
-  ClassDestructor(lexemes, cur_pos, next_pos, cur_command) then
+  if ClassMember(lexemes, cur_pos, next_pos, cur_command) then
   begin
     Result := true;
     repeat
       cur_pos := next_pos;
-      if (lexemes[cur_pos].value = ';') and 
-      (lexemes[cur_pos + 1].value = 'static') then
-      begin
-        cur_pos += 2;
-        cur_command.AddNode('static');
-      end;
-    until not (Assignment(lexemes, cur_pos, next_pos, cur_command) or
-    FieldList(lexemes, cur_pos, next_pos, cur_command) or
-    ProcedureDecl(lexemes, cur_pos, next_pos, cur_command) or 
-    FunctionDecl(lexemes, cur_pos, next_pos, cur_command) or
-    &Property(lexemes, cur_pos, next_pos, cur_command) or
-    ClassConstructor(lexemes, cur_pos, next_pos, cur_command) or
-    ClassDestructor(lexemes, cur_pos, next_pos, cur_command));
+    until not ((lexemes[cur_pos].value = ';') and ClassMember(lexemes, cur_pos + 1, next_pos, cur_command));
   end;
   next_pos := cur_pos;
   if Result then
     upper_command.AddNode(cur_command);
 end;
 
-/// ClassSectionSequence -->  ClassSection {';' ClassSection} 
+/// ClassSectionSequence =  ClassSection, { ";", ClassSection } ;
 function ClassSectionSequence(lexemes: List<lexem>; cur_pos: integer; var next_pos: integer; upper_command: node): boolean;
 begin
   var cur_command := new node('ClassSectionSequence');
@@ -1662,7 +1666,7 @@ begin
   end;
 end;
 
-/// RecordType --> yrecord [ClassSectionSequence] [';'] yend 
+/// RecordType = "record", [ ClassSectionSequence ], [ ";" ], "end" ;
 function RecordType(lexemes: List<lexem>; cur_pos: integer; var next_pos: integer; upper_command: node): boolean;
 begin
   var cur_command := new node('RecordType');
@@ -1682,8 +1686,7 @@ begin
   end;
 end;
 
-/// ClassType --> [ClassPrefix] class [Parameters] [ClassSectionSequence] [';'] end 
-///             | [ClassPrefix] class Parameters [ [ClassSectionSequence] [';'] end]
+/// ClassType = [ ClassPrefix ], "class", ( [ Parameters ], [ ClassSectionSequence ], [ ";" ], "end" | Parameters, [ [ ClassSectionSequence ], [ ";" ], "end" ] ) ;
 function ClassType(lexemes: List<lexem>; cur_pos: integer; var next_pos: integer; upper_command: node): boolean;
 begin
   var cur_command := new node('ClassType');
@@ -1709,20 +1712,19 @@ begin
   end;
 end;
 
-/// Subrange --> ConstFactor '..' ConstFactor
+/// Subrange = Factor, "..", Factor ;
 function Subrange(lexemes: List<lexem>; cur_pos: integer; var next_pos: integer; upper_command: node): boolean;
 begin
   var cur_command := new node('Subrange');
   Result := 
-    ConstFactor(lexemes, cur_pos, next_pos, cur_command) and
+    Factor(lexemes, cur_pos, next_pos, cur_command) and
     (lexemes[next_pos].value = '..') and
-    ConstFactor(lexemes, next_pos + 1, next_pos, cur_command);
+    Factor(lexemes, next_pos + 1, next_pos, cur_command);
   if Result then
     upper_command.AddNode(cur_command);
 end;
 
-/// ArrayType --> yarray [ '[' Subrange {',' Subrange} ']' ] yof Type
-///             | yarray [ '[' {','} ']' ] yof Type
+/// ArrayType = "array", [ "[", ( Subrange, { ",", Subrange } | { "," } ), "]" ] "of", Type ;
 function ArrayType(lexemes: List<lexem>; cur_pos: integer; var next_pos: integer; upper_command: node): boolean;
 begin
   var cur_command := new node('ArrayType');
@@ -1771,7 +1773,7 @@ begin
     upper_command.AddNode(cur_command);
 end;
 
-/// TypeList --> Type {',' Type}
+/// TypeList = Type, { ",", Type } ;
 function TypeList(lexemes: List<lexem>; cur_pos: integer; var next_pos: integer; upper_command: node): boolean;
 begin
   var cur_command := new node('TypeList');
@@ -1786,7 +1788,7 @@ begin
   end;
 end;
 
-/// Type --> ArrayType | PointerType | RecordType | ClassType | SetType | EnumType | Designator '<' TypeList '>' | Designator
+/// Type = ArrayType | PointerType | RecordType | ClassType | SetType | EnumType | Designator, "<", TypeList, ">" | Designator ;
 function &Type(lexemes: List<lexem>; cur_pos: integer; var next_pos: integer; upper_command: node): boolean;
 begin
   var cur_command := new node('Type');
@@ -1811,7 +1813,7 @@ begin
     upper_command.AddNode(cur_command);
 end;
 
-/// ConstFactor --> yident | ynumber | ytrue | yfalse | ystring | ynil
+(*/// ConstFactor = Identifier | Number | "true" | "false" | StringValue | ynil ;
 function ConstFactor(lexemes: List<lexem>; cur_pos: integer; var next_pos: integer; upper_command: node): boolean;
 begin
   Result :=
@@ -1826,22 +1828,11 @@ begin
     upper_command.AddNode('ConstFactor').AddNode(lexemes[cur_pos].value);
     next_pos := cur_pos + 1;
   end;
-end;
+end;*)
 
-/// ConstExpression --> [UnaryOperator] ConstFactor
-function ConstExpression(lexemes: List<lexem>; cur_pos: integer; var next_pos: integer; upper_command: node): boolean;
-begin
-  var cur_command := new node('ConstExpression');
-  if UnaryOperator(lexemes, cur_pos, cur_command) then
-    cur_pos += 1;
-  Result := ConstFactor(lexemes, cur_pos, next_pos, cur_command);
-  if Result then
-    upper_command.AddNode(cur_command);
-end;
-
-/// VariableDecl --> yident ':' Type ':=' Expression
-///                | yident ':=' Expression
-///                | IdentList ':' Type
+/// VariableDecl = Identifier, ":", Type, ":=", Expression
+///              | Identifier, ":=", Expression
+///              | IdentList, ":", Type ;
 function VariableDecl(lexemes: List<lexem>; cur_pos: integer; var next_pos: integer; upper_command: node): boolean;
 begin
   var cur_command := new node('VariableDecl');
@@ -1873,7 +1864,7 @@ begin
     upper_command.AddNode(cur_command);
 end;
 
-/// TypeDef --> yident '=' Type
+/// TypeDef = Identifier, "=", Type ;
 function TypeDef(lexemes: List<lexem>; cur_pos: integer; var next_pos: integer; upper_command: node): boolean;
 begin
   var cur_command := new node('TypeDef');
@@ -1886,7 +1877,7 @@ begin
     upper_command.AddNode(cur_command);
 end;
 
-/// ConstantDef --> yident [':' Type] '=' ConstExpression
+/// ConstantDef = Identifier, [ ":", Type ], "=", Expression ;
 function ConstantDef(lexemes: List<lexem>; cur_pos: integer; var next_pos: integer; upper_command: node): boolean;
 begin
   var cur_command := new node('ConstantDef');
@@ -1906,7 +1897,7 @@ begin
   end;
 end;
 
-/// VariableDeclBlock --> yvar VariableDecl ';' {VariableDecl ';'} 
+/// VariableDeclBlock = "var", VariableDecl, ";", { VariableDecl, ";" } ;
 function VariableDeclBlock(lexemes: List<lexem>; cur_pos: integer; var next_pos: integer; upper_command: node): boolean;
 begin
   var cur_command := new node('VariableDeclBlock');
@@ -1924,7 +1915,7 @@ begin
   end;
 end;
 
-/// TypeDefBlock --> ytype TypeDef ';' {TypeDef ';'} 
+/// TypeDefBlock = "type", TypeDef, ";", { TypeDef, ";" } ;
 function TypeDefBlock(lexemes: List<lexem>; cur_pos: integer; var next_pos: integer; upper_command: node): boolean;
 begin
   var cur_command := new node('TypeDefBlock');
@@ -1942,7 +1933,7 @@ begin
   end;
 end;
 
-/// ConstantDefBlock --> yconst ConstantDef ';' {ConstantDef ';'} 
+/// ConstantDefBlock = "const", ConstantDef, ";", { ConstantDef, ";" } ;
 function ConstantDefBlock(lexemes: List<lexem>; cur_pos: integer; var next_pos: integer; upper_command: node): boolean;
 begin
   var cur_command := new node('ConstantDefBlock');
@@ -1960,7 +1951,7 @@ begin
   end;
 end;
 
-/// Declarations --> (ConstantDefBlock | TypeDefBlock | VariableDeclBlock | SubprogDeclList)
+/// Declarations = ( ConstantDefBlock | TypeDefBlock | VariableDeclBlock | SubprogDeclList ), { ConstantDefBlock | TypeDefBlock | VariableDeclBlock | SubprogDeclList } ;
 function Declarations(lexemes: List<lexem>; cur_pos: integer; var next_pos: integer; upper_command: node): boolean;
 begin
   var cur_command := new node('Declarations');
@@ -1978,7 +1969,7 @@ begin
     upper_command.AddNode(cur_command);
 end;
 
-/// Block --> [Declarations] StatementSequence
+/// Block = [ Declarations ], StatementSequence ;
 function Block(lexemes: List<lexem>; cur_pos: integer; var next_pos: integer; upper_command: node): boolean;
 begin
   var cur_command := new node('Block');
@@ -1989,7 +1980,7 @@ begin
     upper_command.AddNode(cur_command);
 end;
 
-/// IdentList --> yident {',' yident}
+/// IdentList = Identifier, { ",", Identifier } ;
 function IdentList(lexemes: List<lexem>; cur_pos: integer; var next_pos: integer; upper_command: node): boolean;
 begin
   var cur_command := new node('IdentList');
@@ -2007,7 +1998,7 @@ begin
   end;
 end;
 
-/// Parameters --> '(' IdentList ')' 
+/// Parameters = "(", IdentList, ")" ;
 function Parameters(lexemes: List<lexem>; cur_pos: integer; var next_pos: integer; upper_command: node): boolean;
 begin
   var cur_command := new node('Parameters');
@@ -2022,7 +2013,7 @@ begin
   end;
 end;
 
-/// ProgramModule --> [yprogram yident [Parameters] ';'] Block '.'
+/// ProgramModule = [ "program", Identifier, [ Parameters ], ";" ], Block, "." ;
 function ProgramModule(lexemes: List<lexem>; cur_pos: integer; var next_pos: integer; upper_command: node): boolean;
 begin
   var cur_command := new node('ProgramModule');
@@ -2050,7 +2041,7 @@ begin
   end;
 end;
 
-/// CompilationUnit --> ProgramModule
+/// CompilationUnit = ProgramModule ;
 function CompilationUnit(lexemes: List<lexem>; cur_pos: integer; var next_pos: integer; upper_command: node): boolean;
 begin
   var cur_command := new node('CompilationUnit');
@@ -2091,6 +2082,6 @@ begin
   write('Grammar analysis...');
   var next_pos := 0;
   var tree_command := new node('');
-  var grammar_result := CompilationUnit(lexemes, 0, next_pos, tree_command) and (next_pos = lexemes.Count).Println;
+  var grammar_result := (CompilationUnit(lexemes, 0, next_pos, tree_command) and (next_pos = lexemes.Count)).Println;
   if grammar_result then PrettyPrint(tree_command[0], 0, '');
 end.
